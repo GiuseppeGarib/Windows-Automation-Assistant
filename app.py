@@ -1,7 +1,7 @@
 import ctypes, json, re, sys, time, webbrowser
 from datetime import datetime
 from pathlib import Path
-from PySide6.QtCore import QThread, Signal, Qt, QTimer
+from PySide6.QtCore import QThread, Signal, Qt, QTimer, QObject
 from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QGuiApplication
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QTextEdit, QListWidget, QSplitter, QMessageBox, QPlainTextEdit,
@@ -14,8 +14,13 @@ try:
 except Exception:
     pyautogui = None
 
+try:
+    from pynput import keyboard, mouse
+except Exception:
+    keyboard = mouse = None
+
 APP_NAME = "Windows Automation Assistant"
-APP_VERSION = "0.7.0"
+APP_VERSION = "0.8.0"
 DEFAULT_SHORTCUTS = {"execute":"Ctrl+Return", "preview":"Ctrl+Shift+V", "stop":"Esc",
                      "save":"Ctrl+S", "add_action":"Ctrl+N", "shortcuts":"Ctrl+,"}
 
@@ -119,6 +124,67 @@ class Runner(QThread):
         except Exception as exc:
             self.log.emit(f"ERRORE: {exc}"); self.finished_ok.emit(False)
 
+class ActionRecorder(QObject):
+    action = Signal(str)
+    status = Signal(str)
+    def __init__(self):
+        super().__init__(); self.active=False; self.paused=False; self.last_event=None
+        self.modifiers=set(); self.mouse_listener=None; self.keyboard_listener=None
+    def start(self):
+        if keyboard is None or mouse is None: raise RuntimeError('Registrazione non disponibile: dipendenza pynput assente.')
+        self.active=True; self.paused=False; self.last_event=None; self.modifiers.clear()
+        self.mouse_listener=mouse.Listener(on_click=self._click,on_scroll=self._scroll)
+        self.keyboard_listener=keyboard.Listener(on_press=self._press,on_release=self._release)
+        self.mouse_listener.start(); self.keyboard_listener.start(); self.status.emit('Registrazione attiva')
+    def pause(self): self.paused=True; self.status.emit('Registrazione in pausa')
+    def resume(self): self.paused=False; self.last_event=None; self.status.emit('Registrazione attiva')
+    def stop(self):
+        self.active=False
+        for listener in (self.mouse_listener,self.keyboard_listener):
+            if listener: listener.stop()
+        self.status.emit('Registrazione terminata')
+    def _emit(self,line):
+        if not self.active or self.paused: return
+        now=time.monotonic()
+        if self.last_event is not None and now-self.last_event>=0.35:
+            self.action.emit('WAIT '+str(min(60,round(now-self.last_event,2))))
+        self.last_event=now; self.action.emit(line)
+    def _click(self,x,y,button,pressed):
+        if pressed and button==mouse.Button.left: self._emit(f'CLICK {int(x)} {int(y)}')
+    def _scroll(self,x,y,dx,dy):
+        amount=max(-20,min(20,int(dy)))
+        if amount: self._emit(f'SCROLL {amount}')
+    def _name(self,key):
+        special={keyboard.Key.enter:'enter',keyboard.Key.tab:'tab',keyboard.Key.esc:'esc',
+          keyboard.Key.backspace:'backspace',keyboard.Key.delete:'delete',keyboard.Key.up:'up',
+          keyboard.Key.down:'down',keyboard.Key.left:'left',keyboard.Key.right:'right',
+          keyboard.Key.home:'home',keyboard.Key.end:'end',keyboard.Key.page_up:'pageup',
+          keyboard.Key.page_down:'pagedown',keyboard.Key.space:'space'}
+        for i in range(1,13):
+            if getattr(keyboard.Key,f'f{i}',None)==key: return f'f{i}'
+        if key in special: return special[key]
+        try:
+            if key.char and len(key.char)==1 and key.char.isalnum(): return key.char.lower()
+        except AttributeError: pass
+        return None
+    def _modifier(self,key):
+        mapping={keyboard.Key.ctrl_l:'ctrl',keyboard.Key.ctrl_r:'ctrl',keyboard.Key.alt_l:'alt',
+          keyboard.Key.alt_r:'alt',keyboard.Key.shift:'shift',keyboard.Key.shift_l:'shift',
+          keyboard.Key.shift_r:'shift',keyboard.Key.cmd:'win',keyboard.Key.cmd_l:'win',keyboard.Key.cmd_r:'win'}
+        return mapping.get(key)
+    def _press(self,key):
+        mod=self._modifier(key)
+        if mod: self.modifiers.add(mod); return
+        name=self._name(key)
+        if not name: return
+        if len(name)==1 and name.isalnum() and not self.modifiers: return
+        order=['ctrl','alt','shift','win']
+        keys=[m for m in order if m in self.modifiers]+[name]
+        self._emit('HOTKEY '+'+'.join(keys))
+    def _release(self,key):
+        mod=self._modifier(key)
+        if mod: self.modifiers.discard(mod)
+
 class ShortcutDialog(QDialog):
     LABELS={"execute":"Esegui procedura","preview":"Verifica istruzioni","stop":"STOP (interrompi)",
             "save":"Salva procedura","add_action":"Aggiungi azione guidata","shortcuts":"Impostazioni tasti rapidi"}
@@ -193,7 +259,7 @@ class ClickCoordinateDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self,paths):
         super().__init__(); self.paths=paths; self.runner=None; self.current_procedure=None; self.shortcuts={}; self.active_run_info=None; self.is_dirty=False; self._setting_editor=False
-        self.load_settings()
+        self.load_settings(); self.recorder=None; self.recorded_count=0
         self.setWindowTitle(f"{APP_NAME} {APP_VERSION}"); self.resize(1120,770); self.setMinimumSize(900,620)
         # Tema applicato dopo la creazione dei controlli.
         root=QWidget(); layout=QVBoxLayout(root); layout.setContentsMargins(20,16,20,16); layout.setSpacing(10)
@@ -240,7 +306,12 @@ class MainWindow(QMainWindow):
         rv.addWidget(QLabel("REGISTRO SESSIONE")); self.logview=QTextEdit(); self.logview.setReadOnly(True)
         self.logview.setMaximumHeight(140); rv.addWidget(self.logview,1)
         split.addWidget(left); split.addWidget(right); split.setSizes([250,820]); layout.addWidget(split,1)
-        buttons=QHBoxLayout(); preview=QPushButton("Verifica istruzioni"); preview.clicked.connect(self.preview); buttons.addWidget(preview)
+        buttons=QHBoxLayout()
+        self.record_btn=QPushButton('● Avvia registrazione'); self.record_btn.clicked.connect(self.start_recording); buttons.addWidget(self.record_btn)
+        self.pause_record_btn=QPushButton('⏸ Pausa'); self.pause_record_btn.clicked.connect(self.toggle_recording_pause); self.pause_record_btn.setEnabled(False); buttons.addWidget(self.pause_record_btn)
+        self.stop_record_btn=QPushButton('■ Termina registrazione'); self.stop_record_btn.clicked.connect(self.stop_recording); self.stop_record_btn.setEnabled(False); buttons.addWidget(self.stop_record_btn)
+        self.record_status=QLabel('Registrazione non attiva'); buttons.addWidget(self.record_status)
+        preview=QPushButton('Verifica istruzioni'); preview.clicked.connect(self.preview); buttons.addWidget(preview)
         run=QPushButton("▶ Esegui"); run.setObjectName("primary"); run.clicked.connect(self.execute); buttons.addWidget(run)
         self.stop_btn=QPushButton("⏹ STOP"); self.stop_btn.setObjectName("stop"); self.stop_btn.clicked.connect(self.stop)
         self.stop_btn.setEnabled(False); buttons.addWidget(self.stop_btn); layout.addLayout(buttons)
@@ -478,6 +549,44 @@ class MainWindow(QMainWindow):
         except (OSError,ValueError,AttributeError,json.JSONDecodeError) as exc:
             QMessageBox.warning(self,"Procedura non disponibile",str(exc)); return
         self.execute_script(source,name)
+    def start_recording(self):
+        if self.runner and self.runner.isRunning():
+            QMessageBox.information(self,'Automazione in corso','Interrompi prima l’automazione attiva.'); return
+        answer=QMessageBox.warning(self,'Registrazione azioni',
+            'Acquisisco clic sinistri, rotella, tasti funzionali e combinazioni. Il testo digitato normalmente NON viene registrato.\\n\\n'
+            'Evita comunque schermate con dati personali o sensibili. La registrazione resta attiva finché non la termini.\\n\\n'
+            'Avviare una nuova registrazione? Il contenuto dell’editor sarà sostituito dopo la conferma delle modifiche non salvate.',
+            QMessageBox.Yes|QMessageBox.No,QMessageBox.No)
+        if answer!=QMessageBox.Yes or not self.confirm_discard_changes(): return
+        self.current_procedure=None; self.set_editor_content(''); self.recorded_count=0
+        self.recorder=ActionRecorder(); self.recorder.action.connect(self.append_recorded_action); self.recorder.status.connect(self.record_status.setText)
+        try: self.recorder.start()
+        except Exception as exc:
+            self.recorder=None; QMessageBox.critical(self,'Registrazione non disponibile',str(exc)); return
+        self.record_btn.setEnabled(False); self.pause_record_btn.setEnabled(True); self.stop_record_btn.setEnabled(True)
+        self.log('Registrazione avviata: acquisizione limitata ad azioni non testuali.')
+
+    def append_recorded_action(self,line):
+        if self.recorded_count>=100:
+            self.stop_recording(); QMessageBox.warning(self,'Limite raggiunto','La registrazione ha raggiunto il limite di 100 azioni.'); return
+        current=self.editor.toPlainText(); self.set_editor_content((current+'\\n' if current else '')+line)
+        self.is_dirty=True; self.setWindowTitle(f'{APP_NAME} {APP_VERSION} *'); self.recorded_count+=1
+        self.log(f'Registrata: {line}')
+
+    def toggle_recording_pause(self):
+        if not self.recorder or not self.recorder.active: return
+        if self.recorder.paused:
+            self.recorder.resume(); self.pause_record_btn.setText('⏸ Pausa')
+        else:
+            self.recorder.pause(); self.pause_record_btn.setText('▶ Riprendi')
+
+    def stop_recording(self):
+        if not self.recorder: return
+        self.recorder.stop(); self.recorder=None
+        self.record_btn.setEnabled(True); self.pause_record_btn.setEnabled(False); self.pause_record_btn.setText('⏸ Pausa')
+        self.stop_record_btn.setEnabled(False); self.record_status.setText(f'Registrazione terminata · {self.recorded_count} azioni')
+        self.log(f'Registrazione terminata: {self.recorded_count} azioni acquisite.')
+        self.statusBar().showMessage('Registrazione pronta: verifica e salva la procedura.' if self.recorded_count else 'Nessuna azione registrata.')
     def add_action(self):
         commands=["WAIT — Attendi","OPEN_URL — Apri un indirizzo web","TYPE — Scrivi testo",
                   "HOTKEY — Premi una combinazione","CLICK — Clic su coordinate","SCROLL — Scorri"]
@@ -606,6 +715,7 @@ class MainWindow(QMainWindow):
             self.set_editor_content(script); self.current_procedure=name; self.log(f"Procedura caricata: {name}")
         except (OSError,ValueError,json.JSONDecodeError) as exc: QMessageBox.warning(self,"Errore di caricamento",str(exc))
     def closeEvent(self,event):
+        if self.recorder: self.stop_recording()
         if self.runner and self.runner.isRunning():
             answer=QMessageBox.question(self,"Automazione in corso","Un'automazione è ancora attiva. Vuoi interromperla e chiudere?",
                                         QMessageBox.Yes|QMessageBox.No,QMessageBox.No)
