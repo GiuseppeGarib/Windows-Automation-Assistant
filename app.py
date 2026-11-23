@@ -218,7 +218,7 @@ class MainWindow(QMainWindow):
         lv.addWidget(QLabel("HOTKEY DELLE PROCEDURE"))
         self.procedure_hotkey_list=QListWidget()
         self.procedure_hotkey_list.setMaximumHeight(150)
-        self.procedure_hotkey_list.setToolTip("Elenco delle scorciatoie assegnate alle procedure salvate")
+        self.procedure_hotkey_list.setToolTip("Elenco delle scorciatoie assegnate alle procedure salvate. Doppio clic su una riga per avviare la procedura.")
         self.procedure_hotkey_list.itemDoubleClicked.connect(self.run_selected_hotkey_procedure)
         lv.addWidget(self.procedure_hotkey_list)
         assign_hotkey=QPushButton("Assegna hotkey alla procedura selezionata")
@@ -254,7 +254,8 @@ class MainWindow(QMainWindow):
                         self.settings["shortcuts"].update({k:v for k,v in saved["shortcuts"].items() if k in DEFAULT_SHORTCUTS and isinstance(v,str)})
                     if isinstance(saved.get("procedure_hotkeys"),dict):
                         self.settings["procedure_hotkeys"]={k:v for k,v in saved["procedure_hotkeys"].items()
-                                                            if isinstance(k,str) and isinstance(v,str) and v.strip()}
+                                                            if isinstance(k,str) and k not in {".",".."} and not re.search(r'[<>:"/\\|?*\x00-\x1f]',k)
+                                                            and isinstance(v,str) and v.strip()}
         except (OSError,ValueError,json.JSONDecodeError): pass
         self.shortcuts=self.settings["shortcuts"]
     def save_settings(self):
@@ -303,6 +304,10 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self,"Conflitto tasti rapidi",f"{value} è assegnato sia a «{used[value]}» sia a «{ShortcutDialog.LABELS[key]}». Scegli combinazioni diverse.")
                 return
             if value: used[value]=ShortcutDialog.LABELS[key]
+        for procedure_name,procedure_sequence in self.settings.get("procedure_hotkeys",{}).items():
+            if procedure_sequence and procedure_sequence in values.values():
+                QMessageBox.warning(self,"Conflitto hotkey",f"{procedure_sequence} è già assegnata alla procedura «{procedure_name}».")
+                return
         previous=self.shortcuts; self.shortcuts=values; self.settings["shortcuts"]=values
         if self.save_settings():
             self.install_shortcuts(); self.log("Tasti rapidi aggiornati e salvati sulla pendrive.")
