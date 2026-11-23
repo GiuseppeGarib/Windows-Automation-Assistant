@@ -200,6 +200,7 @@ class MainWindow(QMainWindow):
         head=QHBoxLayout(); titles=QVBoxLayout(); title=QLabel(APP_NAME); title.setObjectName("title"); titles.addWidget(title)
         sub=QLabel("Automazioni desktop · procedure e impostazioni archiviate sulla pendrive"); sub.setObjectName("sub")
         titles.addWidget(sub); head.addLayout(titles); head.addStretch()
+        history_btn=QPushButton("Cronologia"); history_btn.clicked.connect(self.show_history); head.addWidget(history_btn)
         head.addWidget(QLabel("Tema"))
         self.theme_combo=QComboBox()
         self.theme_combo.addItem("Segui Windows","system")
@@ -212,6 +213,8 @@ class MainWindow(QMainWindow):
         help_btn=QPushButton("Guida comandi"); help_btn.clicked.connect(self.show_help); head.addWidget(help_btn)
         layout.addLayout(head)
         split=QSplitter(); left=QWidget(); lv=QVBoxLayout(left); lv.addWidget(QLabel("PROCEDURE SALVATE"))
+        self.procedure_search=QLineEdit(); self.procedure_search.setPlaceholderText("Cerca una procedura…")
+        self.procedure_search.textChanged.connect(self.filter_procedures); lv.addWidget(self.procedure_search)
         self.list=QListWidget(); self.list.itemDoubleClicked.connect(self.load_procedure); lv.addWidget(self.list)
         for label,callback in [("Nuova procedura",self.new_procedure),("Salva procedura…",self.save_procedure),
                                ("Carica selezionata",self.load_procedure),("Elimina selezionata",self.delete_procedure)]:
@@ -249,6 +252,29 @@ class MainWindow(QMainWindow):
         self.refresh_procedures(); self.install_shortcuts(); self.log("Modalità portatile attiva.")
         try: QGuiApplication.styleHints().colorSchemeChanged.connect(self.on_system_theme_changed)
         except (AttributeError, TypeError): pass
+    def filter_procedures(self,*_):
+        query=self.procedure_search.text().strip().casefold()
+        for i in range(self.list.count()):
+            item=self.list.item(i)
+            item.setHidden(query not in item.text().casefold())
+    def show_history(self):
+        dialog=QDialog(self); dialog.setWindowTitle("Cronologia automazioni"); dialog.resize(700,480)
+        layout=QVBoxLayout(dialog); view=QTextEdit(); view.setReadOnly(True)
+        history_file=self.paths["history"]/"executions.jsonl"
+        entries=[]
+        try:
+            if history_file.exists():
+                for raw in history_file.read_text(encoding="utf-8").splitlines()[-100:]:
+                    try:
+                        entry=json.loads(raw)
+                        entries.append("{0} | {1} | {2} | {3} azioni".format(entry.get("started",""),entry.get("procedure","Procedura"),entry.get("status",""),entry.get("actions_count",0)))
+                    except (ValueError,TypeError): pass
+        except OSError as exc:
+            entries=["Impossibile leggere la cronologia dalla pendrive: {0}".format(exc)]
+        view.setPlainText("\n".join(reversed(entries)) if entries else "Non è ancora stata eseguita alcuna procedura.")
+        layout.addWidget(view)
+        close=QPushButton("Chiudi"); close.clicked.connect(dialog.accept); layout.addWidget(close)
+        dialog.exec()
     def effective_theme(self, preference):
         if preference in ("light","dark"): return preference
         try: return "dark" if QGuiApplication.styleHints().colorScheme()==Qt.ColorScheme.Dark else "light"
@@ -493,6 +519,7 @@ class MainWindow(QMainWindow):
         for file in sorted(self.paths["procedures"].glob("*.json")):
             self.list.addItem(file.stem)
             if file.stem==select_name: self.list.setCurrentRow(self.list.count()-1)
+        self.filter_procedures()
         self.refresh_procedure_hotkeys()
     def preview(self):
         try:
