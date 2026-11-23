@@ -41,7 +41,7 @@ Python serve soltanto sul PC di compilazione, non sui PC ospiti. La compilazione
 - Tasti rapidi personalizzabili e salvati in Data/Settings/settings.json.
 - STOP richiamabile anche da tastiera.
 - Registro persistente delle operazioni.
-- Selettore coordinate CLICK con aggiornamento live del puntatore, indicazione del monitor e acquisizione con un pulsante.
+- Selettore coordinate CLICK con aggiornamento live del puntatore, indicazione del monitor e acquisizione con acquisizione tramite F8 (senza spostare il puntatore).
 - Coordinate riferite al desktop virtuale Windows: supporta monitor secondari anche a sinistra o sopra il principale, con coordinate negative.
 - Nessuna esecuzione arbitraria di comandi shell o PowerShell.
 
