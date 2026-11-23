@@ -192,7 +192,7 @@ class ClickCoordinateDialog(QDialog):
 
 class MainWindow(QMainWindow):
     def __init__(self,paths):
-        super().__init__(); self.paths=paths; self.runner=None; self.current_procedure=None; self.shortcuts={}; self.active_run_info=None
+        super().__init__(); self.paths=paths; self.runner=None; self.current_procedure=None; self.shortcuts={}; self.active_run_info=None; self.is_dirty=False; self._setting_editor=False
         self.load_settings()
         self.setWindowTitle(f"{APP_NAME} {APP_VERSION}"); self.resize(1120,770); self.setMinimumSize(900,620)
         # Tema applicato dopo la creazione dei controlli.
@@ -232,6 +232,7 @@ class MainWindow(QMainWindow):
         right=QWidget(); rv=QVBoxLayout(right); rv.addWidget(QLabel("ISTRUZIONI (una per riga)"))
         self.editor=QPlainTextEdit(); self.editor.setPlaceholderText("# Usa Aggiungi azione per comporre la procedura passo passo")
         self.editor.setPlainText("# Esempio\nWAIT 1\nOPEN_URL https://example.com"); rv.addWidget(self.editor,3)
+        self.editor.textChanged.connect(self.on_editor_changed)
         tools=QHBoxLayout()
         add=QPushButton("＋ Aggiungi azione guidata"); add.clicked.connect(self.add_action); tools.addWidget(add)
         template=QPushButton("Inserisci modello…"); template.clicked.connect(self.insert_template); tools.addWidget(template)
@@ -275,6 +276,24 @@ class MainWindow(QMainWindow):
         layout.addWidget(view)
         close=QPushButton("Chiudi"); close.clicked.connect(dialog.accept); layout.addWidget(close)
         dialog.exec()
+    def on_editor_changed(self):
+        if not self._setting_editor:
+            self.is_dirty=True
+            self.setWindowTitle(f"{APP_NAME} {APP_VERSION} *")
+    def set_editor_content(self,source):
+        self._setting_editor=True
+        self.editor.blockSignals(True)
+        self.editor.setPlainText(source)
+        self.editor.blockSignals(False)
+        self._setting_editor=False
+        self.is_dirty=False
+        self.setWindowTitle(f"{APP_NAME} {APP_VERSION}")
+    def confirm_discard_changes(self):
+        if not self.is_dirty: return True
+        answer=QMessageBox.question(self,"Modifiche non salvate","Vuoi salvare le modifiche prima di continuare?",
+                                    QMessageBox.Save|QMessageBox.Discard|QMessageBox.Cancel,QMessageBox.Save)
+        if answer==QMessageBox.Save: return self.save_procedure()
+        return answer==QMessageBox.Discard
     def effective_theme(self, preference):
         if preference in ("light","dark"): return preference
         try: return "dark" if QGuiApplication.styleHints().colorScheme()==Qt.ColorScheme.Dark else "light"
@@ -495,10 +514,8 @@ class MainWindow(QMainWindow):
             cursor=self.editor.textCursor(); cursor.insertText(("\n" if cursor.position()>0 else "")+templates[name])
             self.editor.setTextCursor(cursor); self.editor.setFocus()
     def new_procedure(self):
-        if self.editor.toPlainText().strip():
-            answer=QMessageBox.question(self,"Nuova procedura","Sostituire il contenuto corrente?",QMessageBox.Yes|QMessageBox.No,QMessageBox.No)
-            if answer!=QMessageBox.Yes: return
-        self.current_procedure=None; self.editor.clear(); self.editor.setFocus()
+        if not self.confirm_discard_changes(): return
+        self.current_procedure=None; self.set_editor_content(""); self.editor.setFocus()
     def show_help(self):
         QMessageBox.information(self,"Guida rapida",
           "COMANDI DISPONIBILI\n\nWAIT 1.5 — attende fino a 60 secondi\n"
@@ -573,7 +590,8 @@ class MainWindow(QMainWindow):
         payload={"name":name,"script":self.editor.toPlainText(),"updated":datetime.now().isoformat(timespec="seconds"),"version":1}
         try:
             target.write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding="utf-8")
-            self.current_procedure=name; self.refresh_procedures(name); self.log(f"Procedura salvata sulla pendrive: {name}")
+            self.current_procedure=name; self.is_dirty=False; self.setWindowTitle(f"{APP_NAME} {APP_VERSION}")
+            self.refresh_procedures(name); self.log(f"Procedura salvata sulla pendrive: {name}")
         except OSError as exc: QMessageBox.critical(self,"Errore di salvataggio",f"Impossibile scrivere sulla pendrive:\n{exc}")
     def load_procedure(self,*_):
         item=self.list.currentItem()
@@ -582,7 +600,8 @@ class MainWindow(QMainWindow):
         try:
             payload=json.loads(target.read_text(encoding="utf-8")); script=payload.get("script")
             if not isinstance(script,str): raise ValueError("Formato della procedura non valido.")
-            self.editor.setPlainText(script); self.current_procedure=name; self.log(f"Procedura caricata: {name}")
+            if not self.confirm_discard_changes(): return
+            self.set_editor_content(script); self.current_procedure=name; self.log(f"Procedura caricata: {name}")
         except (OSError,ValueError,json.JSONDecodeError) as exc: QMessageBox.warning(self,"Errore di caricamento",str(exc))
     def delete_procedure(self):
         item=self.list.currentItem()
