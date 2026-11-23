@@ -9,7 +9,7 @@ python -m pip install --upgrade pip
 if errorlevel 1 goto error
 python -m pip install -r requirements.txt
 if errorlevel 1 goto error
-python -m PyInstaller --noconfirm --clean --windowed --onedir --name WindowsAutomationAssistant --contents-directory _internal app.py
+python -m PyInstaller --noconfirm --clean --windowed --onedir --name WindowsAutomationAssistant --contents-directory _internal --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 --hidden-import pynput._util.win32 app.py
 if errorlevel 1 goto error
 for %%D in (Procedures Settings History Logs) do if not exist "dist\WindowsAutomationAssistant\Data\%%D" mkdir "dist\WindowsAutomationAssistant\Data\%%D"
 (
