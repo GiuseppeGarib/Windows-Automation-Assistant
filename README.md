@@ -41,7 +41,8 @@ Python serve soltanto sul PC di compilazione, non sui PC ospiti. La compilazione
 - Tasti rapidi personalizzabili e salvati in Data/Settings/settings.json.
 - STOP richiamabile anche da tastiera.
 - Registro persistente delle operazioni.
-- Verifica delle coordinate di clic rispetto alle dimensioni dello schermo.
+- Selettore coordinate CLICK con aggiornamento live del puntatore, indicazione del monitor e acquisizione con un pulsante.
+- Coordinate riferite al desktop virtuale Windows: supporta monitor secondari anche a sinistra o sopra il principale, con coordinate negative.
 - Nessuna esecuzione arbitraria di comandi shell o PowerShell.
 
 ## Tasti rapidi iniziali
@@ -59,10 +60,10 @@ Le combinazioni si modificano dal pulsante **Tasti rapidi…**. Sono attive solt
     OPEN_URL https://example.com
     TYPE Testo di prova
     HOTKEY CTRL+L
-    CLICK 500 300
+    CLICK 500 300  # coordinate globali del desktop virtuale
     SCROLL -3
 
-Usa **Aggiungi azione guidata** per scegliere un comando e inserire i parametri, oppure **Inserisci modello** per partire da una sequenza pronta. CLICK usa coordinate dello schermo in pixel. Le azioni agiscono sulla finestra attiva: utilizzare soltanto su dispositivi e applicazioni per i quali si dispone di autorizzazione.
+Usa **Aggiungi azione guidata** per scegliere un comando e inserire i parametri, oppure **Inserisci modello** per partire da una sequenza pronta. CLICK usa coordinate globali del desktop virtuale in pixel; durante l'inserimento mostra la posizione del mouse in tempo reale e consente di acquisirla. Su Windows il clic viene indirizzato anche ai monitor secondari. Le azioni agiscono sulla finestra attiva: utilizzare soltanto su dispositivi e applicazioni per i quali si dispone di autorizzazione.
 
 ## Limiti di questa versione
 È una prima base funzionale. Non include ancora registrazione guidata delle azioni, OCR/riconoscimento visivo, selezione dei controlli tramite nome o interpretazione in linguaggio naturale. La compatibilità va verificata su diverse configurazioni Windows.
