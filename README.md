@@ -55,7 +55,7 @@ Python serve soltanto sul PC di compilazione, non sui PC ospiti. La compilazione
 - Ctrl+N: aggiungi azione guidata.
 - Ctrl+,: personalizza tasti rapidi.
 
-Le combinazioni dei comandi dell'app si modificano dal pulsante **Tasti rapidi…**. Le hotkey delle procedure si assegnano selezionando una procedura e usando **Assegna hotkey alla procedura selezionata**; l'elenco dedicato mostra tutte le associazioni e consente di rimuoverle. Sono attive soltanto quando la finestra del programma è in primo piano; non sono hotkey globali di Windows. È possibile lasciare vuoto un campo per disattivare la relativa scorciatoia.
+Le combinazioni dei comandi dell'app si modificano dal pulsante **Tasti rapidi…**. Le hotkey delle procedure si assegnano selezionando una procedura e usando **Assegna hotkey alla procedura selezionata**; l'elenco dedicato mostra tutte le associazioni e consente di rimuoverle. Un doppio clic su una riga avvia la procedura corrispondente. Anche queste hotkey funzionano solo quando la finestra dell'app è attiva e chiedono conferma prima dell'esecuzione. Sono attive soltanto quando la finestra del programma è in primo piano; non sono hotkey globali di Windows. È possibile lasciare vuoto un campo per disattivare la relativa scorciatoia.
 
 ## Formato delle istruzioni
     WAIT 1.5
