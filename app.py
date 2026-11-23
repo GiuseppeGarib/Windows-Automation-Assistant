@@ -271,8 +271,7 @@ class MainWindow(QMainWindow):
         QTextEdit,QPlainTextEdit,QListWidget,QLineEdit,QKeySequenceEdit {background:PANEL;color:FG;border:1px solid BORDER;border-radius:8px;padding:8px;selection-background-color:SELECTION}
         QComboBox QAbstractItemView {background:PANEL;color:FG;selection-background-color:SELECTION}
         QStatusBar {background:STATUS;color:FG}"""
-        for key,value in {"BG":bg,"FG":fg,"TITLE":title,"MUTED":muted,"BUTTON":button,"BORDER":border,"HOVER":hover,
-                          "STOPFG":stopfg,"STOP":stop,"PANEL":panel,"SELECTION":selection,"STATUS":status}.items():
+        for key,value in {"STOPFG":stopfg,"STOP":stop,"BG":bg,"FG":fg,"TITLE":title,"MUTED":muted,"BUTTON":button,"BORDER":border,"HOVER":hover,"PANEL":panel,"SELECTION":selection,"STATUS":status}.items():
             qss=qss.replace(key,value)
         self.setStyleSheet(qss)
     def on_theme_changed(self,*_):
