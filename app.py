@@ -15,7 +15,7 @@ except Exception:
     pyautogui = None
 
 APP_NAME = "Windows Automation Assistant"
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.5.0"
 DEFAULT_SHORTCUTS = {"execute":"Ctrl+Return", "preview":"Ctrl+Shift+V", "stop":"Esc",
                      "save":"Ctrl+S", "add_action":"Ctrl+N", "shortcuts":"Ctrl+,"}
 
@@ -215,6 +215,16 @@ class MainWindow(QMainWindow):
         for label,callback in [("Nuova procedura",self.new_procedure),("Salva procedura…",self.save_procedure),
                                ("Carica selezionata",self.load_procedure),("Elimina selezionata",self.delete_procedure)]:
             btn=QPushButton(label); btn.clicked.connect(callback); lv.addWidget(btn)
+        lv.addWidget(QLabel("HOTKEY DELLE PROCEDURE"))
+        self.procedure_hotkey_list=QListWidget()
+        self.procedure_hotkey_list.setMaximumHeight(150)
+        self.procedure_hotkey_list.setToolTip("Elenco delle scorciatoie assegnate alle procedure salvate")
+        self.procedure_hotkey_list.itemDoubleClicked.connect(self.run_selected_hotkey_procedure)
+        lv.addWidget(self.procedure_hotkey_list)
+        assign_hotkey=QPushButton("Assegna hotkey alla procedura selezionata")
+        assign_hotkey.clicked.connect(self.assign_procedure_hotkey); lv.addWidget(assign_hotkey)
+        remove_hotkey=QPushButton("Rimuovi hotkey")
+        remove_hotkey.clicked.connect(self.remove_procedure_hotkey); lv.addWidget(remove_hotkey)
         right=QWidget(); rv=QVBoxLayout(right); rv.addWidget(QLabel("ISTRUZIONI (una per riga)"))
         self.editor=QPlainTextEdit(); self.editor.setPlaceholderText("# Usa Aggiungi azione per comporre la procedura passo passo")
         self.editor.setPlainText("# Esempio\nWAIT 1\nOPEN_URL https://example.com"); rv.addWidget(self.editor,3)
@@ -235,12 +245,16 @@ class MainWindow(QMainWindow):
         self.refresh_procedures(); self.install_shortcuts(); self.log("Modalità portatile attiva.")
     def load_settings(self):
         self.settings_file=self.paths["settings"]/"settings.json"
-        self.settings={"shortcuts":dict(DEFAULT_SHORTCUTS)}
+        self.settings={"shortcuts":dict(DEFAULT_SHORTCUTS),"procedure_hotkeys":{}}
         try:
             if self.settings_file.exists():
                 saved=json.loads(self.settings_file.read_text(encoding="utf-8"))
-                if isinstance(saved.get("shortcuts"),dict):
-                    self.settings["shortcuts"].update({k:v for k,v in saved["shortcuts"].items() if k in DEFAULT_SHORTCUTS and isinstance(v,str)})
+                if isinstance(saved,dict):
+                    if isinstance(saved.get("shortcuts"),dict):
+                        self.settings["shortcuts"].update({k:v for k,v in saved["shortcuts"].items() if k in DEFAULT_SHORTCUTS and isinstance(v,str)})
+                    if isinstance(saved.get("procedure_hotkeys"),dict):
+                        self.settings["procedure_hotkeys"]={k:v for k,v in saved["procedure_hotkeys"].items()
+                                                            if isinstance(k,str) and isinstance(v,str) and v.strip()}
         except (OSError,ValueError,json.JSONDecodeError): pass
         self.shortcuts=self.settings["shortcuts"]
     def save_settings(self):
@@ -268,6 +282,18 @@ class MainWindow(QMainWindow):
             used[normalized]=key
             shortcut=QShortcut(parsed,self); shortcut.setContext(Qt.WindowShortcut); shortcut.activated.connect(callback)
             self._shortcut_objects.append(shortcut)
+        for procedure_name,sequence in self.settings.get("procedure_hotkeys",{}).items():
+            if not sequence.strip(): continue
+            try: parsed=QKeySequence(sequence)
+            except Exception: continue
+            if parsed.isEmpty(): continue
+            normalized=parsed.toString(QKeySequence.PortableText)
+            if normalized in used:
+                self.log(f"Hotkey procedura in conflitto ignorata: {procedure_name} ({normalized})"); continue
+            used[normalized]=f"procedura {procedure_name}"
+            shortcut=QShortcut(parsed,self); shortcut.setContext(Qt.WindowShortcut)
+            shortcut.activated.connect(lambda name=procedure_name: self.run_procedure_hotkey(name))
+            self._shortcut_objects.append(shortcut)
     def configure_shortcuts(self):
         dialog=ShortcutDialog(self.shortcuts,self)
         if dialog.exec()!=QDialog.Accepted: return
@@ -282,6 +308,76 @@ class MainWindow(QMainWindow):
             self.install_shortcuts(); self.log("Tasti rapidi aggiornati e salvati sulla pendrive.")
         else:
             self.shortcuts=previous; self.settings["shortcuts"]=previous; self.install_shortcuts()
+    def refresh_procedure_hotkeys(self):
+        if not hasattr(self,"procedure_hotkey_list"): return
+        self.procedure_hotkey_list.clear()
+        mappings=self.settings.get("procedure_hotkeys",{})
+        for name,sequence in sorted(mappings.items(),key=lambda item:item[0].casefold()):
+            if (self.paths["procedures"]/f"{name}.json").exists():
+                self.procedure_hotkey_list.addItem(f"{sequence}    →    {name}")
+    def assign_procedure_hotkey(self):
+        item=self.list.currentItem()
+        if not item:
+            QMessageBox.information(self,"Seleziona una procedura","Seleziona prima una procedura salvata nell'elenco superiore.")
+            return
+        name=item.text()
+        dialog=QDialog(self); dialog.setWindowTitle(f"Hotkey — {name}")
+        layout=QVBoxLayout(dialog)
+        layout.addWidget(QLabel(f"Premi la combinazione da assegnare a «{name}»:"))
+        edit=QKeySequenceEdit(QKeySequence(self.settings.get("procedure_hotkeys",{}).get(name,"")))
+        layout.addWidget(edit)
+        info=QLabel("La combinazione avvia questa procedura chiedendo conferma. Funziona quando la finestra dell'app è attiva.")
+        info.setWordWrap(True); layout.addWidget(info)
+        buttons=QDialogButtonBox(QDialogButtonBox.Save|QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept); buttons.rejected.connect(dialog.reject); layout.addWidget(buttons)
+        if dialog.exec()!=QDialog.Accepted: return
+        sequence=edit.keySequence().toString(QKeySequence.PortableText)
+        if not sequence:
+            QMessageBox.information(self,"Nessuna hotkey","Non è stata inserita alcuna combinazione.")
+            return
+        for key,app_sequence in self.shortcuts.items():
+            if app_sequence and QKeySequence(app_sequence)==QKeySequence(sequence):
+                QMessageBox.warning(self,"Hotkey già utilizzata",f"{sequence} è già assegnata a una funzione dell'app.")
+                return
+        for other_name,other_sequence in self.settings.get("procedure_hotkeys",{}).items():
+            if other_name!=name and other_sequence and QKeySequence(other_sequence)==QKeySequence(sequence):
+                QMessageBox.warning(self,"Hotkey già utilizzata",f"{sequence} è già assegnata alla procedura «{other_name}».")
+                return
+        previous=dict(self.settings.get("procedure_hotkeys",{}))
+        self.settings.setdefault("procedure_hotkeys",{})[name]=sequence
+        if self.save_settings():
+            self.install_shortcuts(); self.refresh_procedure_hotkeys()
+            self.log(f"Hotkey {sequence} assegnata alla procedura «{name}».")
+        else:
+            self.settings["procedure_hotkeys"]=previous
+    def remove_procedure_hotkey(self):
+        item=self.procedure_hotkey_list.currentItem()
+        if not item:
+            QMessageBox.information(self,"Seleziona una hotkey","Seleziona una riga nell'elenco delle hotkey.")
+            return
+        name=item.text().split("→",1)[-1].strip()
+        mappings=self.settings.get("procedure_hotkeys",{})
+        if name not in mappings: return
+        previous=dict(mappings); del mappings[name]
+        if self.save_settings():
+            self.install_shortcuts(); self.refresh_procedure_hotkeys()
+            self.log(f"Hotkey rimossa dalla procedura «{name}».")
+        else:
+            self.settings["procedure_hotkeys"]=previous
+    def run_selected_hotkey_procedure(self,*_):
+        item=self.procedure_hotkey_list.currentItem()
+        if not item: return
+        name=item.text().split("→",1)[-1].strip()
+        self.run_procedure_hotkey(name)
+    def run_procedure_hotkey(self,name):
+        target=self.paths["procedures"]/f"{name}.json"
+        try:
+            payload=json.loads(target.read_text(encoding="utf-8"))
+            source=payload.get("script")
+            if not isinstance(source,str): raise ValueError("Formato della procedura non valido.")
+        except (OSError,ValueError,AttributeError,json.JSONDecodeError) as exc:
+            QMessageBox.warning(self,"Procedura non disponibile",str(exc)); return
+        self.execute_script(source,name)
     def add_action(self):
         commands=["WAIT — Attendi","OPEN_URL — Apri un indirizzo web","TYPE — Scrivi testo",
                   "HOTKEY — Premi una combinazione","CLICK — Clic su coordinate","SCROLL — Scorri"]
@@ -344,6 +440,7 @@ class MainWindow(QMainWindow):
         for file in sorted(self.paths["procedures"].glob("*.json")):
             self.list.addItem(file.stem)
             if file.stem==select_name: self.list.setCurrentRow(self.list.count()-1)
+        self.refresh_procedure_hotkeys()
     def preview(self):
         try:
             actions=parse_script(self.editor.toPlainText())
@@ -352,17 +449,19 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"{len(actions)} istruzioni valide")
         except ParseError as exc: QMessageBox.warning(self,"Istruzioni non valide",str(exc))
     def execute(self):
+        self.execute_script(self.editor.toPlainText(),"procedura corrente")
+    def execute_script(self,source,label):
         if self.runner and self.runner.isRunning():
             QMessageBox.information(self,"Automazione già attiva","Interrompi l'automazione corrente prima di avviarne un'altra."); return
-        try: actions=parse_script(self.editor.toPlainText())
+        try: actions=parse_script(source)
         except ParseError as exc: QMessageBox.warning(self,"Errore di sintassi",str(exc)); return
-        if not actions: QMessageBox.information(self,"Nessuna azione","Inserisci almeno un'istruzione."); return
+        if not actions: QMessageBox.information(self,"Nessuna azione","La procedura non contiene istruzioni."); return
         summary="\n".join(f"{i}. {cmd} — {arg}" for i,(cmd,arg) in enumerate(actions,1))
-        answer=QMessageBox.question(self,"Conferma esecuzione","Eseguire queste istruzioni?\n\n"+summary,
+        answer=QMessageBox.question(self,"Conferma esecuzione",f"Eseguire la procedura «{label}»?\n\n"+summary,
                                     QMessageBox.Yes|QMessageBox.No,QMessageBox.No)
         if answer!=QMessageBox.Yes: return
         self.runner=Runner(actions); self.runner.log.connect(self.log); self.runner.finished_ok.connect(self.on_finished)
-        self.stop_btn.setEnabled(True); self.statusBar().showMessage("In esecuzione…"); self.runner.start()
+        self.stop_btn.setEnabled(True); self.statusBar().showMessage(f"In esecuzione: {label}…"); self.runner.start()
     def stop(self):
         if self.runner and self.runner.isRunning():
             self.runner.stop(); self.statusBar().showMessage("Interruzione in corso…")
@@ -400,6 +499,9 @@ class MainWindow(QMainWindow):
         if answer!=QMessageBox.Yes: return
         try:
             (self.paths["procedures"]/f"{name}.json").unlink(missing_ok=True)
+            self.settings.setdefault("procedure_hotkeys",{}).pop(name,None)
+            self.save_settings()
+            self.install_shortcuts()
             self.refresh_procedures(); self.log(f"Procedura eliminata: {name}")
         except OSError as exc: QMessageBox.warning(self,"Errore",str(exc))
 
