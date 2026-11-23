@@ -127,8 +127,8 @@ class Runner(QThread):
 class ActionRecorder(QObject):
     action = Signal(str)
     status = Signal(str)
-    def __init__(self):
-        super().__init__(); self.active=False; self.paused=False; self.last_event=None
+    def __init__(self,ignore_rect=None):
+        super().__init__(); self.active=False; self.paused=False; self.last_event=None; self.ignore_rect=ignore_rect
         self.modifiers=set(); self.mouse_listener=None; self.keyboard_listener=None
     def start(self):
         if keyboard is None or mouse is None: raise RuntimeError('Registrazione non disponibile: dipendenza pynput assente.')
@@ -149,11 +149,15 @@ class ActionRecorder(QObject):
         if self.last_event is not None and now-self.last_event>=0.35:
             self.action.emit('WAIT '+str(min(60,round(now-self.last_event,2))))
         self.last_event=now; self.action.emit(line)
+    def _ignored(self,x,y):
+        if not self.ignore_rect: return False
+        left,top,width,height=self.ignore_rect
+        return left<=x<left+width and top<=y<top+height
     def _click(self,x,y,button,pressed):
-        if pressed and button==mouse.Button.left: self._emit(f'CLICK {int(x)} {int(y)}')
+        if pressed and button==mouse.Button.left and not self._ignored(x,y): self._emit(f'CLICK {int(x)} {int(y)}')
     def _scroll(self,x,y,dx,dy):
         amount=max(-20,min(20,int(dy)))
-        if amount: self._emit(f'SCROLL {amount}')
+        if amount and not self._ignored(x,y): self._emit(f'SCROLL {amount}')
     def _name(self,key):
         special={keyboard.Key.enter:'enter',keyboard.Key.tab:'tab',keyboard.Key.esc:'esc',
           keyboard.Key.backspace:'backspace',keyboard.Key.delete:'delete',keyboard.Key.up:'up',
@@ -559,17 +563,18 @@ class MainWindow(QMainWindow):
             QMessageBox.Yes|QMessageBox.No,QMessageBox.No)
         if answer!=QMessageBox.Yes or not self.confirm_discard_changes(): return
         self.current_procedure=None; self.set_editor_content(''); self.recorded_count=0
-        self.recorder=ActionRecorder(); self.recorder.action.connect(self.append_recorded_action); self.recorder.status.connect(self.record_status.setText)
+        self.recorder=ActionRecorder(self.frameGeometry().getRect()); self.recorder.action.connect(self.append_recorded_action); self.recorder.status.connect(self.record_status.setText)
         try: self.recorder.start()
         except Exception as exc:
             self.recorder=None; QMessageBox.critical(self,'Registrazione non disponibile',str(exc)); return
         self.record_btn.setEnabled(False); self.pause_record_btn.setEnabled(True); self.stop_record_btn.setEnabled(True)
+        for shortcut in getattr(self,'_shortcut_objects',[]): shortcut.setEnabled(False)
         self.log('Registrazione avviata: acquisizione limitata ad azioni non testuali.')
 
     def append_recorded_action(self,line):
         if self.recorded_count>=100:
             self.stop_recording(); QMessageBox.warning(self,'Limite raggiunto','La registrazione ha raggiunto il limite di 100 azioni.'); return
-        current=self.editor.toPlainText(); self.set_editor_content((current+'\\n' if current else '')+line)
+        current=self.editor.toPlainText(); self.set_editor_content((current+'\n' if current else '')+line)
         self.is_dirty=True; self.setWindowTitle(f'{APP_NAME} {APP_VERSION} *'); self.recorded_count+=1
         self.log(f'Registrata: {line}')
 
@@ -585,6 +590,7 @@ class MainWindow(QMainWindow):
         self.recorder.stop(); self.recorder=None
         self.record_btn.setEnabled(True); self.pause_record_btn.setEnabled(False); self.pause_record_btn.setText('⏸ Pausa')
         self.stop_record_btn.setEnabled(False); self.record_status.setText(f'Registrazione terminata · {self.recorded_count} azioni')
+        for shortcut in getattr(self,'_shortcut_objects',[]): shortcut.setEnabled(True)
         self.log(f'Registrazione terminata: {self.recorded_count} azioni acquisite.')
         self.statusBar().showMessage('Registrazione pronta: verifica e salva la procedura.' if self.recorded_count else 'Nessuna azione registrata.')
     def add_action(self):
