@@ -556,7 +556,7 @@ class MainWindow(QMainWindow):
             entry["status"]=status
             try:
                 with (self.paths["history"]/"executions.jsonl").open("a",encoding="utf-8") as stream:
-                    stream.write(json.dumps(entry,ensure_ascii=False)+"\\n")
+                    stream.write(json.dumps(entry,ensure_ascii=False)+"\n")
             except OSError as exc:
                 self.log(f"Attenzione: cronologia non salvata sulla pendrive: {exc}")
             self.active_run_info=None
