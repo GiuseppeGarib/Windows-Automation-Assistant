@@ -22,7 +22,7 @@ jobs:
       - name: Check Python syntax
         run: python -m compileall -q app.py
       - name: Build portable folder
-        run: python -m PyInstaller --noconfirm --clean --windowed --onedir --name WindowsAutomationAssistant --contents-directory _internal app.py
+        run: python -m PyInstaller --noconfirm --clean --windowed --onedir --name WindowsAutomationAssistant --contents-directory _internal --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 --hidden-import pynput._util.win32 app.py
       - name: Prepare portable data folders
         shell: pwsh
         run: |
