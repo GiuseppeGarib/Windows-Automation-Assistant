@@ -38,8 +38,10 @@ Python serve soltanto sul PC di compilazione, non sui PC ospiti. La compilazione
 - Creazione guidata delle azioni con richieste dei parametri.
 - Modelli di sequenze pronti da inserire nell'editor.
 - Guida integrata alla sintassi.
-- Tasti rapidi personalizzabili e salvati in Data/Settings/settings.json.
+- Tasti rapidi personalizzabili per i comandi dell'app.
+- Elenco separato delle hotkey assegnate alle singole procedure, con assegnazione e rimozione dalla schermata principale; le associazioni sono salvate in Data/Settings/settings.json.
 - STOP richiamabile anche da tastiera.
+- Avvio delle procedure salvate tramite hotkey dedicata, con richiesta di conferma prima dell'esecuzione.
 - Registro persistente delle operazioni.
 - Selettore coordinate CLICK con aggiornamento live del puntatore, indicazione del monitor e acquisizione con acquisizione tramite F8 (senza spostare il puntatore).
 - Coordinate riferite al desktop virtuale Windows: supporta monitor secondari anche a sinistra o sopra il principale, con coordinate negative.
@@ -53,7 +55,7 @@ Python serve soltanto sul PC di compilazione, non sui PC ospiti. La compilazione
 - Ctrl+N: aggiungi azione guidata.
 - Ctrl+,: personalizza tasti rapidi.
 
-Le combinazioni si modificano dal pulsante **Tasti rapidi…**. Sono attive soltanto quando la finestra del programma è in primo piano; non sono hotkey globali di Windows. È possibile lasciare vuoto un campo per disattivare la relativa scorciatoia.
+Le combinazioni dei comandi dell'app si modificano dal pulsante **Tasti rapidi…**. Le hotkey delle procedure si assegnano selezionando una procedura e usando **Assegna hotkey alla procedura selezionata**; l'elenco dedicato mostra tutte le associazioni e consente di rimuoverle. Sono attive soltanto quando la finestra del programma è in primo piano; non sono hotkey globali di Windows. È possibile lasciare vuoto un campo per disattivare la relativa scorciatoia.
 
 ## Formato delle istruzioni
     WAIT 1.5
