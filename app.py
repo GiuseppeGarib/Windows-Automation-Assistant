@@ -1,11 +1,11 @@
-import json, re, sys, time, webbrowser
+import ctypes, json, re, sys, time, webbrowser
 from datetime import datetime
 from pathlib import Path
-from PySide6.QtCore import QThread, Signal, Qt
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtCore import QThread, Signal, Qt, QTimer
+from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QGuiApplication
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QTextEdit, QListWidget, QSplitter, QMessageBox, QPlainTextEdit,
-    QStatusBar, QInputDialog, QDialog, QFormLayout, QKeySequenceEdit, QDialogButtonBox)
+    QStatusBar, QInputDialog, QDialog, QFormLayout, QKeySequenceEdit, QDialogButtonBox, QLineEdit)
 
 try:
     import pyautogui
@@ -15,7 +15,7 @@ except Exception:
     pyautogui = None
 
 APP_NAME = "Windows Automation Assistant"
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.4.0"
 DEFAULT_SHORTCUTS = {"execute":"Ctrl+Return", "preview":"Ctrl+Shift+V", "stop":"Esc",
                      "save":"Ctrl+S", "add_action":"Ctrl+N", "shortcuts":"Ctrl+,"}
 
@@ -60,7 +60,7 @@ def parse_script(source):
         elif cmd=="CLICK":
             try: x,y=map(int,arg.split())
             except Exception: raise ParseError(f"Riga {line_no}: CLICK richiede coordinate X Y.")
-            if not(0<=x<=10000 and 0<=y<=10000): raise ParseError(f"Riga {line_no}: coordinate fuori limite.")
+            if not(-10000<=x<=10000 and -10000<=y<=10000): raise ParseError(f"Riga {line_no}: coordinate fuori limite.")
             actions.append((cmd,(x,y)))
         elif cmd=="SCROLL":
             try: amount=int(arg)
@@ -95,9 +95,23 @@ class Runner(QThread):
                     pyautogui.hotkey(*arg)
                 elif cmd=="CLICK":
                     if pyautogui is None: raise RuntimeError("PyAutoGUI non disponibile.")
-                    width,height=pyautogui.size()
-                    if arg[0]>=width or arg[1]>=height: raise RuntimeError(f"Coordinate fuori schermo ({width}x{height}).")
-                    pyautogui.click(x=arg[0],y=arg[1])
+                    if sys.platform == "win32":
+                        user32=ctypes.windll.user32
+                        left=user32.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
+                        top=user32.GetSystemMetrics(77)    # SM_YVIRTUALSCREEN
+                        width=user32.GetSystemMetrics(78)  # SM_CXVIRTUALSCREEN
+                        height=user32.GetSystemMetrics(79) # SM_CYVIRTUALSCREEN
+                        x,y=arg
+                        if not(left<=x<left+width and top<=y<top+height):
+                            raise RuntimeError(f"Coordinate fuori dal desktop virtuale ({left},{top} {width}x{height}).")
+                        if pyautogui.position()==(0,0):
+                            raise RuntimeError("Failsafe attivo: sposta il mouse fuori dall'angolo alto-sinistro.")
+                        if not user32.SetCursorPos(x,y):
+                            raise RuntimeError("Windows non ha accettato la posizione del puntatore.")
+                        user32.mouse_event(0x0002,0,0,0,0)
+                        user32.mouse_event(0x0004,0,0,0,0)
+                    else:
+                        pyautogui.click(x=arg[0],y=arg[1])
                 elif cmd=="SCROLL":
                     if pyautogui is None: raise RuntimeError("PyAutoGUI non disponibile.")
                     pyautogui.scroll(arg)
@@ -121,6 +135,57 @@ class ShortcutDialog(QDialog):
         buttons.accepted.connect(self.accept); buttons.rejected.connect(self.reject); layout.addWidget(buttons)
     def values(self):
         return {key:edit.keySequence().toString(QKeySequence.PortableText) for key,edit in self.edits.items()}
+
+class ClickCoordinateDialog(QDialog):
+    """Inserimento coordinate con lettura live del desktop virtuale multi-monitor."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Coordinate del clic")
+        self.setMinimumWidth(390)
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Sposta il mouse sul punto da selezionare. Le coordinate sono aggiornate in tempo reale."))
+        self.live = QLabel("X: —    Y: —")
+        self.live.setStyleSheet("font-size:20px;font-weight:700;color:#1764b2;padding:8px")
+        layout.addWidget(self.live)
+        self.monitor = QLabel("Monitor: —")
+        layout.addWidget(self.monitor)
+        form = QFormLayout()
+        self.coordinates = QLineEdit()
+        self.coordinates.setPlaceholderText("X Y, ad esempio -1200 350")
+        form.addRow("Coordinate da usare:", self.coordinates)
+        layout.addLayout(form)
+        capture = QPushButton("Acquisisci posizione attuale")
+        capture.clicked.connect(self.capture_position)
+        layout.addWidget(capture)
+        info = QLabel("Le coordinate sono riferite al desktop virtuale: possono essere negative se un monitor si trova a sinistra o sopra quello principale.")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_position)
+        self.timer.start(40)
+        self.update_position()
+
+    def update_position(self):
+        pos = QCursor.pos()
+        self.live.setText(f"X: {pos.x()}    Y: {pos.y()}")
+        screen = QGuiApplication.screenAt(pos)
+        if screen:
+            g = screen.geometry()
+            self.monitor.setText(f"Monitor: {screen.name()}  ·  area {g.x()},{g.y()}  {g.width()}×{g.height()}")
+        else:
+            self.monitor.setText("Monitor: non identificato")
+
+    def capture_position(self):
+        pos = QCursor.pos()
+        self.coordinates.setText(f"{pos.x()} {pos.y()}")
+
+    def value(self):
+        return self.coordinates.text().strip()
+
 
 class MainWindow(QMainWindow):
     def __init__(self,paths):
@@ -224,9 +289,15 @@ class MainWindow(QMainWindow):
                  "TYPE":("Testo da digitare:",""),"HOTKEY":("Tasti separati da + (es. CTRL+L):","CTRL+L"),
                  "CLICK":("Coordinate X Y in pixel (es. 500 300):","500 300"),
                  "SCROLL":("Valore da -20 a 20:","-3")}
-        label,default=prompts[cmd]
-        value,ok=QInputDialog.getText(self,"Parametri azione",label,text=default)
-        if not ok: return
+        if cmd=="CLICK":
+            dialog=ClickCoordinateDialog(self)
+            if dialog.exec()!=QDialog.Accepted: return
+            value=dialog.value()
+            if not value: return
+        else:
+            label,default=prompts[cmd]
+            value,ok=QInputDialog.getText(self,"Parametri azione",label,text=default)
+            if not ok: return
         line=f"{cmd} {value.strip()}".rstrip()
         try: parse_script(line)
         except ParseError as exc: QMessageBox.warning(self,"Parametri non validi",str(exc)); return
