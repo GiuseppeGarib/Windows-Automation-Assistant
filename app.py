@@ -557,8 +557,8 @@ class MainWindow(QMainWindow):
         if self.runner and self.runner.isRunning():
             QMessageBox.information(self,'Automazione in corso','Interrompi prima l’automazione attiva.'); return
         answer=QMessageBox.warning(self,'Registrazione azioni',
-            'Acquisisco clic sinistri, rotella, tasti funzionali e combinazioni. Il testo digitato normalmente NON viene registrato.\\n\\n'
-            'Evita comunque schermate con dati personali o sensibili. La registrazione resta attiva finché non la termini.\\n\\n'
+            'Acquisisco clic sinistri, rotella, tasti funzionali e combinazioni. Il testo digitato normalmente NON viene registrato.\n\n'
+            'Evita comunque schermate con dati personali o sensibili. La registrazione resta attiva finché non la termini.\n\n'
             'Avviare una nuova registrazione? Il contenuto dell’editor sarà sostituito dopo la conferma delle modifiche non salvate.',
             QMessageBox.Yes|QMessageBox.No,QMessageBox.No)
         if answer!=QMessageBox.Yes or not self.confirm_discard_changes(): return
