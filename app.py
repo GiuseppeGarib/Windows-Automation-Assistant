@@ -192,7 +192,7 @@ class ClickCoordinateDialog(QDialog):
 
 class MainWindow(QMainWindow):
     def __init__(self,paths):
-        super().__init__(); self.paths=paths; self.runner=None; self.current_procedure=None; self.shortcuts={}
+        super().__init__(); self.paths=paths; self.runner=None; self.current_procedure=None; self.shortcuts={}; self.active_run_info=None
         self.load_settings()
         self.setWindowTitle(f"{APP_NAME} {APP_VERSION}"); self.resize(1120,770); self.setMinimumSize(900,620)
         # Tema applicato dopo la creazione dei controlli.
@@ -540,13 +540,26 @@ class MainWindow(QMainWindow):
         answer=QMessageBox.question(self,"Conferma esecuzione",f"Eseguire la procedura «{label}»?\n\n"+summary,
                                     QMessageBox.Yes|QMessageBox.No,QMessageBox.No)
         if answer!=QMessageBox.Yes: return
+        self.active_run_info={"procedure":label,"actions_count":len(actions),"started":datetime.now().isoformat(timespec="seconds")}
         self.runner=Runner(actions); self.runner.log.connect(self.log); self.runner.finished_ok.connect(self.on_finished)
         self.stop_btn.setEnabled(True); self.statusBar().showMessage(f"In esecuzione: {label}…"); self.runner.start()
     def stop(self):
         if self.runner and self.runner.isRunning():
             self.runner.stop(); self.statusBar().showMessage("Interruzione in corso…")
     def on_finished(self,ok):
-        self.stop_btn.setEnabled(False); self.statusBar().showMessage("Completato" if ok else "Interrotto o errore")
+        self.stop_btn.setEnabled(False)
+        status="Completato" if ok else "Interrotto o errore"
+        self.statusBar().showMessage(status)
+        if self.active_run_info:
+            entry=dict(self.active_run_info)
+            entry["finished"]=datetime.now().isoformat(timespec="seconds")
+            entry["status"]=status
+            try:
+                with (self.paths["history"]/"executions.jsonl").open("a",encoding="utf-8") as stream:
+                    stream.write(json.dumps(entry,ensure_ascii=False)+"\\n")
+            except OSError as exc:
+                self.log(f"Attenzione: cronologia non salvata sulla pendrive: {exc}")
+            self.active_run_info=None
     def save_procedure(self):
         name,ok=QInputDialog.getText(self,"Salva procedura","Nome della procedura:",text=self.current_procedure or "")
         if not ok: return
