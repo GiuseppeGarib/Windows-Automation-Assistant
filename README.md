@@ -34,6 +34,7 @@ Python serve soltanto sul PC di compilazione, non sui PC ospiti. La compilazione
 
 ## Funzioni attuali
 - Editor di istruzioni con anteprima e conferma esplicita.
+- Selettore del tema chiaro, scuro o automatico in base alle impostazioni di Windows; preferenza salvata sulla pendrive.
 - Libreria persistente: crea, salva, carica ed elimina procedure.
 - Creazione guidata delle azioni con richieste dei parametri.
 - Modelli di sequenze pronti da inserire nell'editor.
@@ -43,7 +44,7 @@ Python serve soltanto sul PC di compilazione, non sui PC ospiti. La compilazione
 - STOP richiamabile anche da tastiera.
 - Avvio delle procedure salvate tramite hotkey dedicata, con richiesta di conferma prima dell'esecuzione.
 - Registro persistente delle operazioni.
-- Selettore coordinate CLICK con aggiornamento live del puntatore, indicazione del monitor e acquisizione con acquisizione tramite F8 (senza spostare il puntatore).
+- Selettore coordinate CLICK con aggiornamento live del puntatore, indicazione del monitor e acquisizione tramite F8 (senza spostare il puntatore).
 - Coordinate riferite al desktop virtuale Windows: supporta monitor secondari anche a sinistra o sopra il principale, con coordinate negative.
 - Nessuna esecuzione arbitraria di comandi shell o PowerShell.
 
