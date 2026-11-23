@@ -5,8 +5,8 @@ Assistente desktop per Windows, progettato per essere eseguito da pendrive senza
 ## Requisito di portabilità
 - Avvio diretto da pendrive, mantenendo insieme l'intera cartella WindowsAutomationAssistant.
 - Sul PC ospite non servono Python, pip o installazioni aggiuntive.
-- L'applicazione non richiede privilegi amministrativi e non installa servizi, driver o componenti di sistema.
-- Procedure e registri vengono salvati nella cartella Data accanto all'eseguibile.
+- Non richiede privilegi amministrativi e non installa servizi, driver o componenti di sistema.
+- Procedure, tasti rapidi e registri vengono salvati nella cartella Data accanto all'eseguibile.
 - Se Data non è scrivibile, il programma segnala l'errore e non ripiega su cartelle del PC ospite.
 - La build usa PyInstaller in modalità onedir: copiare l'intera cartella, non soltanto l'EXE.
 
@@ -32,16 +32,27 @@ Python serve soltanto sul PC di compilazione, non sui PC ospiti. La compilazione
         History/
         Logs/
 
-La cartella Data viene creata automaticamente al primo avvio.
-
 ## Funzioni attuali
-- Editor di istruzioni e anteprima.
-- Conferma esplicita prima dell'esecuzione.
-- Pulsante STOP e registro persistente.
-- Libreria persistente di procedure: salvataggio, caricamento ed eliminazione.
+- Editor di istruzioni con anteprima e conferma esplicita.
+- Libreria persistente: crea, salva, carica ed elimina procedure.
+- Creazione guidata delle azioni con richieste dei parametri.
+- Modelli di sequenze pronti da inserire nell'editor.
+- Guida integrata alla sintassi.
+- Tasti rapidi personalizzabili e salvati in Data/Settings/settings.json.
+- STOP richiamabile anche da tastiera.
+- Registro persistente delle operazioni.
 - Verifica delle coordinate di clic rispetto alle dimensioni dello schermo.
-- Azioni: WAIT, OPEN_URL, TYPE, HOTKEY, CLICK, SCROLL.
 - Nessuna esecuzione arbitraria di comandi shell o PowerShell.
+
+## Tasti rapidi iniziali
+- Ctrl+Invio: esegui (chiede conferma).
+- Ctrl+Shift+V: verifica istruzioni.
+- Esc: STOP.
+- Ctrl+S: salva procedura.
+- Ctrl+N: aggiungi azione guidata.
+- Ctrl+,: personalizza tasti rapidi.
+
+Le combinazioni si modificano dal pulsante **Tasti rapidi…**. Sono attive soltanto quando la finestra del programma è in primo piano; non sono hotkey globali di Windows. È possibile lasciare vuoto un campo per disattivare la relativa scorciatoia.
 
 ## Formato delle istruzioni
     WAIT 1.5
@@ -51,7 +62,7 @@ La cartella Data viene creata automaticamente al primo avvio.
     CLICK 500 300
     SCROLL -3
 
-CLICK usa coordinate dello schermo in pixel. Le azioni agiscono sulla finestra attiva: utilizzare soltanto su dispositivi e applicazioni per i quali si dispone di autorizzazione.
+Usa **Aggiungi azione guidata** per scegliere un comando e inserire i parametri, oppure **Inserisci modello** per partire da una sequenza pronta. CLICK usa coordinate dello schermo in pixel. Le azioni agiscono sulla finestra attiva: utilizzare soltanto su dispositivi e applicazioni per i quali si dispone di autorizzazione.
 
 ## Limiti di questa versione
-È una prima base funzionale. Non include ancora registrazione guidata, OCR/riconoscimento visivo, selezione dei controlli tramite nome o interpretazione in linguaggio naturale. La compatibilità va verificata su diverse configurazioni Windows.
+È una prima base funzionale. Non include ancora registrazione guidata delle azioni, OCR/riconoscimento visivo, selezione dei controlli tramite nome o interpretazione in linguaggio naturale. La compatibilità va verificata su diverse configurazioni Windows.
