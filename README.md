@@ -36,6 +36,7 @@ Python serve soltanto sul PC di compilazione, non sui PC ospiti. La compilazione
 - Editor di istruzioni con anteprima e conferma esplicita.
 - Selettore del tema chiaro, scuro o automatico in base alle impostazioni di Windows; preferenza salvata sulla pendrive.
 - Libreria persistente: crea, salva, carica ed elimina procedure, con ricerca rapida per nome.
+- Protezione dalle modifiche non salvate: prima di caricare, creare o chiudere, chiede se salvare, scartare o annullare.
 - Creazione guidata delle azioni con richieste dei parametri.
 - Modelli di sequenze pronti da inserire nell'editor.
 - Guida integrata alla sintassi.
