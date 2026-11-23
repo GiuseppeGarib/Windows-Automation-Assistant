@@ -5,7 +5,7 @@ from PySide6.QtCore import QThread, Signal, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QGuiApplication
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QTextEdit, QListWidget, QSplitter, QMessageBox, QPlainTextEdit,
-    QStatusBar, QInputDialog, QDialog, QFormLayout, QKeySequenceEdit, QDialogButtonBox, QLineEdit)
+    QStatusBar, QInputDialog, QDialog, QFormLayout, QKeySequenceEdit, QDialogButtonBox, QLineEdit, QComboBox)
 
 try:
     import pyautogui
@@ -15,7 +15,7 @@ except Exception:
     pyautogui = None
 
 APP_NAME = "Windows Automation Assistant"
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.6.0"
 DEFAULT_SHORTCUTS = {"execute":"Ctrl+Return", "preview":"Ctrl+Shift+V", "stop":"Esc",
                      "save":"Ctrl+S", "add_action":"Ctrl+N", "shortcuts":"Ctrl+,"}
 
@@ -195,18 +195,19 @@ class MainWindow(QMainWindow):
         super().__init__(); self.paths=paths; self.runner=None; self.current_procedure=None; self.shortcuts={}
         self.load_settings()
         self.setWindowTitle(f"{APP_NAME} {APP_VERSION}"); self.resize(1120,770); self.setMinimumSize(900,620)
-        self.setStyleSheet("""
-        QMainWindow,QWidget{background:#f3f7fc;color:#172235;font-family:Segoe UI}
-        QLabel#title{font-size:24px;font-weight:700;color:#16365f} QLabel#sub{color:#65758b}
-        QPushButton{background:#e5edf7;border:1px solid #c9d7e8;border-radius:8px;padding:8px 12px;font-weight:600}
-        QPushButton:hover{background:#d8e6f5} QPushButton#primary{background:#2675d8;color:white;border:0}
-        QPushButton#stop{background:#ffe4e4;color:#a52222;border-color:#ffc4c4}
-        QTextEdit,QPlainTextEdit,QListWidget{background:white;border:1px solid #d6e0eb;border-radius:8px;padding:8px}
-        QStatusBar{background:#eaf0f7}""")
+        # Tema applicato dopo la creazione dei controlli.
         root=QWidget(); layout=QVBoxLayout(root); layout.setContentsMargins(20,16,20,16); layout.setSpacing(10)
         head=QHBoxLayout(); titles=QVBoxLayout(); title=QLabel(APP_NAME); title.setObjectName("title"); titles.addWidget(title)
         sub=QLabel("Automazioni desktop · procedure e impostazioni archiviate sulla pendrive"); sub.setObjectName("sub")
         titles.addWidget(sub); head.addLayout(titles); head.addStretch()
+        head.addWidget(QLabel("Tema"))
+        self.theme_combo=QComboBox()
+        self.theme_combo.addItem("Segui Windows","system")
+        self.theme_combo.addItem("Chiaro","light")
+        self.theme_combo.addItem("Scuro","dark")
+        self.theme_combo.setToolTip("La preferenza viene salvata sulla pendrive.")
+        head.addWidget(self.theme_combo)
+        self.theme_combo.currentIndexChanged.connect(self.on_theme_changed)
         shortcuts_btn=QPushButton("Tasti rapidi…"); shortcuts_btn.clicked.connect(self.configure_shortcuts); head.addWidget(shortcuts_btn)
         help_btn=QPushButton("Guida comandi"); help_btn.clicked.connect(self.show_help); head.addWidget(help_btn)
         layout.addLayout(head)
@@ -242,14 +243,62 @@ class MainWindow(QMainWindow):
         note=QLabel("Tasti rapidi modificabili · anteprima e conferma prima dell'esecuzione · dati nella cartella Data accanto al programma.")
         note.setObjectName("sub"); note.setWordWrap(True); layout.addWidget(note)
         self.setCentralWidget(root); self.setStatusBar(QStatusBar()); self.statusBar().showMessage(f"Dati: {paths['root']}")
+        theme=self.settings.get("theme","system")
+        self.theme_combo.setCurrentIndex(max(0,self.theme_combo.findData(theme)))
+        self.apply_theme(theme)
         self.refresh_procedures(); self.install_shortcuts(); self.log("Modalità portatile attiva.")
+        try: QGuiApplication.styleHints().colorSchemeChanged.connect(self.on_system_theme_changed)
+        except (AttributeError, TypeError): pass
+    def effective_theme(self, preference):
+        if preference in ("light","dark"): return preference
+        try: return "dark" if QGuiApplication.styleHints().colorScheme()==Qt.ColorScheme.Dark else "light"
+        except (AttributeError, TypeError): return "light"
+    def apply_theme(self, preference):
+        dark=self.effective_theme(preference)=="dark"
+        if dark:
+            bg,panel,fg,muted,title,border,button,hover,status="#17212e","#202d3d","#e7edf5","#a9b8ca","#9bc8ff","#40536a","#2b3b4e","#374c63","#202d3d"
+            stop,stopfg,selection="#542f35","#ffd9dc","#315b86"
+        else:
+            bg,panel,fg,muted,title,border,button,hover,status="#f3f7fc","#ffffff","#172235","#65758b","#16365f","#d6e0eb","#e5edf7","#d8e6f5","#eaf0f7"
+            stop,stopfg,selection="#ffe4e4","#a52222","#cfe2fa"
+        qss="""QMainWindow,QWidget {background:BG;color:FG;font-family:Segoe UI}
+        QLabel#title {font-size:24px;font-weight:700;color:TITLE}
+        QLabel#sub {color:MUTED}
+        QPushButton,QComboBox {background:BUTTON;color:FG;border:1px solid BORDER;border-radius:8px;padding:8px 12px;font-weight:600}
+        QPushButton:hover,QComboBox:hover {background:HOVER}
+        QPushButton#primary {background:#2675d8;color:white;border:0}
+        QPushButton#stop {background:STOP;color:STOPFG;border-color:BORDER}
+        QTextEdit,QPlainTextEdit,QListWidget,QLineEdit,QKeySequenceEdit {background:PANEL;color:FG;border:1px solid BORDER;border-radius:8px;padding:8px;selection-background-color:SELECTION}
+        QComboBox QAbstractItemView {background:PANEL;color:FG;selection-background-color:SELECTION}
+        QStatusBar {background:STATUS;color:FG}"""
+        for key,value in {"BG":bg,"FG":fg,"TITLE":title,"MUTED":muted,"BUTTON":button,"BORDER":border,"HOVER":hover,
+                          "STOPFG":stopfg,"STOP":stop,"PANEL":panel,"SELECTION":selection,"STATUS":status}.items():
+            qss=qss.replace(key,value)
+        self.setStyleSheet(qss)
+    def on_theme_changed(self,*_):
+        value=self.theme_combo.currentData()
+        previous=self.settings.get("theme","system")
+        self.settings["theme"]=value
+        self.apply_theme(value)
+        if self.save_settings():
+            self.log("Tema aggiornato e salvato sulla pendrive.")
+        else:
+            self.settings["theme"]=previous
+            self.theme_combo.blockSignals(True)
+            self.theme_combo.setCurrentIndex(max(0,self.theme_combo.findData(previous)))
+            self.theme_combo.blockSignals(False)
+            self.apply_theme(previous)
+    def on_system_theme_changed(self,*_):
+        if self.settings.get("theme","system")=="system": self.apply_theme("system")
+
     def load_settings(self):
         self.settings_file=self.paths["settings"]/"settings.json"
-        self.settings={"shortcuts":dict(DEFAULT_SHORTCUTS),"procedure_hotkeys":{}}
+        self.settings={"shortcuts":dict(DEFAULT_SHORTCUTS),"procedure_hotkeys":{},"theme":"system"}
         try:
             if self.settings_file.exists():
                 saved=json.loads(self.settings_file.read_text(encoding="utf-8"))
                 if isinstance(saved,dict):
+                    if saved.get("theme") in {"system","light","dark"}: self.settings["theme"]=saved["theme"]
                     if isinstance(saved.get("shortcuts"),dict):
                         self.settings["shortcuts"].update({k:v for k,v in saved["shortcuts"].items() if k in DEFAULT_SHORTCUTS and isinstance(v,str)})
                     if isinstance(saved.get("procedure_hotkeys"),dict):
