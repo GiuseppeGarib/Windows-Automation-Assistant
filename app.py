@@ -292,7 +292,9 @@ class MainWindow(QMainWindow):
         if not self.is_dirty: return True
         answer=QMessageBox.question(self,"Modifiche non salvate","Vuoi salvare le modifiche prima di continuare?",
                                     QMessageBox.Save|QMessageBox.Discard|QMessageBox.Cancel,QMessageBox.Save)
-        if answer==QMessageBox.Save: return self.save_procedure()
+        if answer==QMessageBox.Save:
+            self.save_procedure()
+            return not self.is_dirty
         return answer==QMessageBox.Discard
     def effective_theme(self, preference):
         if preference in ("light","dark"): return preference
@@ -603,6 +605,17 @@ class MainWindow(QMainWindow):
             if not self.confirm_discard_changes(): return
             self.set_editor_content(script); self.current_procedure=name; self.log(f"Procedura caricata: {name}")
         except (OSError,ValueError,json.JSONDecodeError) as exc: QMessageBox.warning(self,"Errore di caricamento",str(exc))
+    def closeEvent(self,event):
+        if self.runner and self.runner.isRunning():
+            answer=QMessageBox.question(self,"Automazione in corso","Un'automazione è ancora attiva. Vuoi interromperla e chiudere?",
+                                        QMessageBox.Yes|QMessageBox.No,QMessageBox.No)
+            if answer!=QMessageBox.Yes:
+                event.ignore(); return
+            self.runner.stop()
+            self.runner.wait(2000)
+        if not self.confirm_discard_changes():
+            event.ignore(); return
+        event.accept()
     def delete_procedure(self):
         item=self.list.currentItem()
         if not item: return
