@@ -135,7 +135,12 @@ class ActionRecorder(QObject):
         self.active=True; self.paused=False; self.last_event=None; self.modifiers.clear()
         self.mouse_listener=mouse.Listener(on_click=self._click,on_scroll=self._scroll)
         self.keyboard_listener=keyboard.Listener(on_press=self._press,on_release=self._release)
-        self.mouse_listener.start(); self.keyboard_listener.start(); self.status.emit('Registrazione attiva')
+        try:
+            self.mouse_listener.start(); self.keyboard_listener.start()
+        except Exception:
+            self.stop()
+            raise
+        self.status.emit('Registrazione attiva')
     def pause(self): self.paused=True; self.status.emit('Registrazione in pausa')
     def resume(self): self.paused=False; self.last_event=None; self.status.emit('Registrazione attiva')
     def stop(self):
@@ -729,6 +734,9 @@ class MainWindow(QMainWindow):
                 event.ignore(); return
             self.runner.stop()
             self.runner.wait(2000)
+            if self.runner.isRunning():
+                QMessageBox.information(self,"Interruzione in corso","L'automazione non si è ancora fermata. Attendi il completamento dell'interruzione prima di chiudere.")
+                event.ignore(); return
         if not self.confirm_discard_changes():
             event.ignore(); return
         event.accept()
