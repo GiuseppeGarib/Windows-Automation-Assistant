@@ -38,6 +38,9 @@ Python serve soltanto sul PC di compilazione, non sui PC ospiti. La compilazione
 - Libreria persistente: crea, salva, carica ed elimina procedure, con ricerca rapida per nome.
 - Protezione dalle modifiche non salvate: prima di caricare, creare o chiudere, chiede se salvare, scartare o annullare.
 - Creazione guidata delle azioni con richieste dei parametri.
+- Registrazione guidata di clic sinistri, scorrimento, tasti funzionali e combinazioni; include pause temporali tra le azioni.
+- Controlli di registrazione Avvia/Pausa/Riprendi/Termina; la sequenza viene inserita nell'editor e può essere verificata, modificata e salvata.
+- Per tutela della privacy, il testo digitato normalmente non viene acquisito: i contenuti da digitare si aggiungono manualmente con l'azione TYPE. La registrazione va usata solo su schermate autorizzate e senza dati sensibili.
 - Modelli di sequenze pronti da inserire nell'editor.
 - Guida integrata alla sintassi.
 - Tasti rapidi personalizzabili per i comandi dell'app.
@@ -70,4 +73,4 @@ Le combinazioni dei comandi dell'app si modificano dal pulsante **Tasti rapidi�
 Usa **Aggiungi azione guidata** per scegliere un comando e inserire i parametri, oppure **Inserisci modello** per partire da una sequenza pronta. CLICK usa coordinate globali del desktop virtuale in pixel; durante l'inserimento mostra la posizione del mouse in tempo reale e consente di acquisirla. Su Windows il clic viene indirizzato anche ai monitor secondari. Le azioni agiscono sulla finestra attiva: utilizzare soltanto su dispositivi e applicazioni per i quali si dispone di autorizzazione.
 
 ## Limiti di questa versione
-È una prima base funzionale. Non include ancora registrazione guidata delle azioni, OCR/riconoscimento visivo, selezione dei controlli tramite nome o interpretazione in linguaggio naturale. La compatibilità va verificata su diverse configurazioni Windows.
+È una prima base funzionale. Non include ancora OCR/riconoscimento visivo, selezione dei controlli tramite nome o interpretazione in linguaggio naturale. La registrazione richiede i permessi di input consentiti dal sistema e non aggira blocchi di Windows o policy aziendali. La compatibilità va verificata su diverse configurazioni Windows.
