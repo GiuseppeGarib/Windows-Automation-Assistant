@@ -15,7 +15,7 @@ except Exception:
     pyautogui = None
 
 APP_NAME = "Windows Automation Assistant"
-APP_VERSION = "0.6.0"
+APP_VERSION = "0.7.0"
 DEFAULT_SHORTCUTS = {"execute":"Ctrl+Return", "preview":"Ctrl+Shift+V", "stop":"Esc",
                      "save":"Ctrl+S", "add_action":"Ctrl+N", "shortcuts":"Ctrl+,"}
 
